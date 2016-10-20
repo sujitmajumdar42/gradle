@@ -25,9 +25,13 @@ import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.cache.CacheRepository;
 import org.gradle.cache.PersistentCache;
+import org.gradle.cache.internal.CacheRepositoryServices;
 import org.gradle.cache.internal.FileLockManager;
 import org.gradle.internal.Factory;
 import org.gradle.internal.SystemProperties;
+import org.gradle.internal.nativeintegration.services.NativeServices;
+import org.gradle.internal.service.DefaultServiceRegistry;
+import org.gradle.internal.service.scopes.GlobalScopeServices;
 import org.gradle.util.GFileUtils;
 import sbt.ScalaInstance;
 import sbt.compiler.AnalyzingCompiler;
@@ -38,12 +42,12 @@ import java.io.IOException;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
-class ZincScalaCompilerFactory {
+public class ZincScalaCompilerFactory {
     private static final Logger LOGGER = Logging.getLogger(ZincScalaCompilerFactory.class);
 
-    private static final String ZINC_CACHE_HOME_DIR_SYSTEM_PROPERTY = "org.gradle.zinc.home.dir";
+    public static final String ZINC_CACHE_HOME_DIR_SYSTEM_PROPERTY = "org.gradle.zinc.home.dir";
     private static final String ZINC_DIR_SYSTEM_PROPERTY = "zinc.dir";
-    private static final String ZINC_DIR_IGNORED_MESSAGE = "In order to guarantee parallel safe Scala compilation, Gradle does not support the '" + ZINC_DIR_SYSTEM_PROPERTY + "' system property and ignores any value provided.";
+    public static final String ZINC_DIR_IGNORED_MESSAGE = "In order to guarantee parallel safe Scala compilation, Gradle does not support the '" + ZINC_DIR_SYSTEM_PROPERTY + "' system property and ignores any value provided.";
 
     static Compiler createParallelSafeCompiler(final Iterable<File> scalaClasspath, final Iterable<File> zincClasspath, final xsbti.Logger logger, File gradleUserHome) {
         File zincCacheHomeDir = new File(System.getProperty(ZINC_CACHE_HOME_DIR_SYSTEM_PROPERTY, gradleUserHome.getAbsolutePath()));
@@ -108,7 +112,7 @@ class ZincScalaCompilerFactory {
                     setup.sbtInterface(),
                     instance,
                     logger);
-            return zincCache.useCache("coping sbt interface", new Factory<File>() {
+            return zincCache.useCache("copying sbt interface", new Factory<File>() {
                 public File create() {
                     GFileUtils.copyFile(tempFile, compilerInterface);
                     return compilerInterface;
@@ -132,5 +136,24 @@ class ZincScalaCompilerFactory {
             Setup.debug(setup, logger);
         }
         return setup;
+    }
+
+    private static class ZincCompilerServices extends DefaultServiceRegistry {
+        private static ZincCompilerServices instance;
+
+        private ZincCompilerServices(File gradleUserHome) {
+            super(NativeServices.getInstance());
+
+            addProvider(new GlobalScopeServices(true));
+            addProvider(new CacheRepositoryServices(gradleUserHome, null));
+        }
+
+        public static ZincCompilerServices getInstance(File gradleUserHome) {
+            if (instance == null) {
+                NativeServices.initialize(gradleUserHome);
+                instance = new ZincCompilerServices(gradleUserHome);
+            }
+            return instance;
+        }
     }
 }
