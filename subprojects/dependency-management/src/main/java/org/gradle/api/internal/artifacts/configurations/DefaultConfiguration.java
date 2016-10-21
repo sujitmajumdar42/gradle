@@ -129,7 +129,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
     private ResolverResults cachedResolverResults = new DefaultResolverResults();
     private boolean dependenciesModified;
     private Map<String, String> attributes;
-    private ConfigurationRole role = ConfigurationRole.FOR_RESOLUTION;
+    private ConfigurationRole role = ConfigurationRole.FOR_BUILDING_ONLY;
 
     public DefaultConfiguration(String path, String name, ConfigurationsProvider configurationsProvider,
                                 ConfigurationResolver resolver, ListenerManager listenerManager,
@@ -755,8 +755,13 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
     }
 
     @Override
-    public void forUseInSelection() {
-        setRole(ConfigurationRole.FOR_SELECTION);
+    public void forPublishingOnly() {
+        setRole(ConfigurationRole.FOR_PUBLISHING_ONLY);
+    }
+
+    @Override
+    public void forBuildingOnly() {
+        setRole(ConfigurationRole.FOR_BUILDING_ONLY);
     }
 
     /**
