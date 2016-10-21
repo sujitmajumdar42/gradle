@@ -113,7 +113,13 @@ public class ZincScalaCompilerFactory {
                     logger);
             return zincCache.useCache("copying sbt interface", new Factory<File>() {
                 public File create() {
-                    GFileUtils.copyFile(tempFile, compilerInterface);
+                    // Another process may have already copied the compiler interface JAR
+                    // Avoid copying over same existing file to avoid locking problems
+                    if (!compilerInterface.exists()) {
+                        GFileUtils.moveFile(tempFile, compilerInterface);
+                    } else {
+                        GFileUtils.deleteQuietly(tempFile);
+                    }
                     return compilerInterface;
                 }
             });
