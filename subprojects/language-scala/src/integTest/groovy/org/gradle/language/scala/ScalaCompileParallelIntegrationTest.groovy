@@ -16,6 +16,7 @@
 
 package org.gradle.language.scala
 
+import com.typesafe.zinc.Setup
 import org.gradle.api.internal.tasks.scala.ZincScalaCompilerFactory
 import org.gradle.execution.taskgraph.DefaultTaskExecutionPlan
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
@@ -269,7 +270,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
     }
 
     Set<File> getZincCacheInterfaceJars() {
-        return findInterfaceJars(zincCacheHomeDir.file("caches/${GradleVersion.current().version}/zinc"))
+        return findInterfaceJars(zincCacheHomeDir.file("caches/${GradleVersion.current().version}/zinc-${Setup.zincVersion().published()}"))
     }
 
     Set<File> getConfiguredZincDirInterfaceJars() {
@@ -279,7 +280,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
     Set<File> findInterfaceJars(TestFile zincDir) {
         return zincDir.allDescendants()
             .collect { file(it) }
-            .findAll { it.name == "compiler-interface.jar" }
+            .findAll { it.name.startsWith("compiler-interface-") && it.name.endsWith(".jar") }
     }
 
     TestFile projectDir(String projectName) {

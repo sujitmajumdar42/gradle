@@ -93,8 +93,7 @@ public class ZincScalaCompilerFactory {
 
     // parallel safe version of Compiler.compilerInterface()
     private static File getCompilerInterface(final Setup setup, final ScalaInstance instance, PersistentCache zincCache, final xsbti.Logger logger) {
-        String sbtInterfaceFileName =
-            String.format("compiler-interface-%s.jar", Compiler.interfaceId(instance.actualVersion()));
+        final String sbtInterfaceFileName = Compiler.interfaceId(instance.actualVersion()) + ".jar";
         final File compilerInterface = new File(setup.cacheDir(), sbtInterfaceFileName);
         if (compilerInterface.exists()) {
             return compilerInterface;
