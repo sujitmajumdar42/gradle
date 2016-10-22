@@ -16,12 +16,12 @@
 
 package org.gradle.language.scala
 
-import com.typesafe.zinc.Setup
 import org.gradle.api.internal.tasks.scala.ZincScalaCompilerFactory
 import org.gradle.execution.taskgraph.DefaultTaskExecutionPlan
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.integtests.fixtures.executer.GradleExecuter
+import org.gradle.language.scala.internal.toolchain.DefaultScalaToolProvider
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.server.http.BlockingHttpServer
 import org.gradle.util.GradleVersion
@@ -71,6 +71,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
         zincCacheInterfaceJars.size() == 1
         configuredZincDirInterfaceJars.size() == 0
         output.count(ZincScalaCompilerFactory.ZINC_DIR_IGNORED_MESSAGE) == MAX_PARALLEL_COMPILERS
+        leakedTempFiles.isEmpty()
 
         // Check that we can successfully use an existing compiler-interface.jar as well
         when:
@@ -81,6 +82,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
         noExceptionThrown()
         zincCacheInterfaceJars.size() == 1
         output.count(ZincScalaCompilerFactory.ZINC_DIR_IGNORED_MESSAGE) == MAX_PARALLEL_COMPILERS
+        leakedTempFiles.isEmpty()
     }
 
     def "multiple tasks in a single build are multi-process safe"() {
@@ -108,6 +110,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
         zincCacheInterfaceJars.size() == 1
         configuredZincDirInterfaceJars.size() == 0
         output.count(ZincScalaCompilerFactory.ZINC_DIR_IGNORED_MESSAGE) == MAX_PARALLEL_COMPILERS
+        leakedTempFiles.isEmpty()
     }
 
     def "multiple independent builds are multi-process safe" () {
@@ -140,6 +143,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
         zincCacheInterfaceJars.size() == 1
         configuredZincDirInterfaceJars.size() == 0
         output.count(ZincScalaCompilerFactory.ZINC_DIR_IGNORED_MESSAGE) == MAX_PARALLEL_COMPILERS
+        leakedTempFiles.isEmpty()
     }
 
     def "no warning shown when zinc dir is not set by user"() {
@@ -169,6 +173,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
         noExceptionThrown()
         zincCacheInterfaceJars.size() == 1
         !output.contains(ZincScalaCompilerFactory.ZINC_DIR_IGNORED_MESSAGE)
+        leakedTempFiles.isEmpty()
     }
 
     GradleExecuter expectTasksWithParallelExecuter() {
@@ -270,11 +275,16 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
     }
 
     Set<File> getZincCacheInterfaceJars() {
-        return findInterfaceJars(zincCacheHomeDir.file("caches/${GradleVersion.current().version}/zinc-${Setup.zincVersion().published()}"))
+        return findInterfaceJars(zincCacheHomeDir.file("caches/${GradleVersion.current().version}/zinc-${DefaultScalaToolProvider.DEFAULT_ZINC_VERSION}"))
     }
 
     Set<File> getConfiguredZincDirInterfaceJars() {
         return findInterfaceJars(configuredZincDir)
+    }
+
+    Set<File> getLeakedTempFiles() {
+        def allFiles = zincCacheHomeDir.allDescendants().collect { file(it) }
+        allFiles.findAll { it.name != "zinc-${DefaultScalaToolProvider.DEFAULT_ZINC_VERSION}.lock" && !(it.name.startsWith("compiler-interface-") && it.name.endsWith(".jar")) }
     }
 
     Set<File> findInterfaceJars(TestFile zincDir) {

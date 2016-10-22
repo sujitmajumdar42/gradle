@@ -39,6 +39,7 @@ import xsbti.compile.JavaCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
@@ -96,14 +97,20 @@ public class ZincScalaCompilerFactory {
         final String sbtInterfaceFileName = Compiler.interfaceId(instance.actualVersion()) + ".jar";
         final File compilerInterface = new File(setup.cacheDir(), sbtInterfaceFileName);
         if (compilerInterface.exists()) {
-            return compilerInterface;
+            return zincCache.useCache("getting sbt interface", new Factory<File>() {
+                @Override
+                public File create() {
+                    return compilerInterface;
+                }
+            });
         }
 
         try {
             // Let's try to compile the interface to a temp file and then copy it to the cache folder.
             // Compiling an interface is an expensive operation which affects performance on machines
             // with many CPUs and we don't want to block while compiling.
-            final File tempFile = File.createTempFile("zinc", ".jar");
+            final File tempFile = File.createTempFile("zinc", ".jar", zincCache.getBaseDir());
+            final long start = System.nanoTime();
             sbt.compiler.IC.compileInterfaceJar(
                     sbtInterfaceFileName,
                     setup.compilerInterfaceSrc(),
@@ -111,6 +118,9 @@ public class ZincScalaCompilerFactory {
                     setup.sbtInterface(),
                     instance,
                     logger);
+            final long compilationTimeMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            LOGGER.debug(String.format("compiling zinc interface completed after %dms", compilationTimeMillis));
+
             return zincCache.useCache("copying sbt interface", new Factory<File>() {
                 public File create() {
                     // Another process may have already copied the compiler interface JAR
