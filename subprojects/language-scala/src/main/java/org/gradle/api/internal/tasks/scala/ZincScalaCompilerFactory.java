@@ -61,21 +61,26 @@ public class ZincScalaCompilerFactory {
                 .withDisplayName(zincCacheName)
                 .withLockOptions(mode(FileLockManager.LockMode.Exclusive))
                 .open();
-        final File cacheDir = zincCache.getBaseDir();
 
-        final String userSuppliedZincDir = System.getProperty("zinc.dir");
-        if (userSuppliedZincDir != null && !userSuppliedZincDir.equals(cacheDir.getAbsolutePath())) {
-            LOGGER.warn(ZINC_DIR_IGNORED_MESSAGE);
-        }
+        Compiler compiler;
+        try {
+            final File cacheDir = zincCache.getBaseDir();
 
-        Compiler compiler = SystemProperties.getInstance().withSystemProperty(ZINC_DIR_SYSTEM_PROPERTY, cacheDir.getAbsolutePath(), new Factory<Compiler>() {
-            @Override
-            public Compiler create() {
-                Setup zincSetup = createZincSetup(scalaClasspath, zincClasspath, logger);
-                return createCompiler(zincSetup, zincCache, logger);
+            final String userSuppliedZincDir = System.getProperty("zinc.dir");
+            if (userSuppliedZincDir != null && !userSuppliedZincDir.equals(cacheDir.getAbsolutePath())) {
+                LOGGER.warn(ZINC_DIR_IGNORED_MESSAGE);
             }
-        });
-        zincCache.close();
+
+            compiler = SystemProperties.getInstance().withSystemProperty(ZINC_DIR_SYSTEM_PROPERTY, cacheDir.getAbsolutePath(), new Factory<Compiler>() {
+                @Override
+                public Compiler create() {
+                    Setup zincSetup = createZincSetup(scalaClasspath, zincClasspath, logger);
+                    return createCompiler(zincSetup, zincCache, logger);
+                }
+            });
+        } finally {
+            zincCache.close();
+        }
 
         return compiler;
     }
@@ -106,10 +111,12 @@ public class ZincScalaCompilerFactory {
         }
 
         try {
-            // Let's try to compile the interface to a temp file and then copy it to the cache folder.
-            // Compiling an interface is an expensive operation which affects performance on machines
-            // with many CPUs and we don't want to block while compiling.
-            final File tempFile = File.createTempFile("zinc", ".jar", zincCache.getBaseDir());
+            // Compile the interface to a temp file and then copy it to the cache folder.
+            // This avoids sporadic cache lock timeouts when the compiler interface JAR takes
+            // a long time to generate while avoiding starving multiple compiler daemons.
+            final File tmpDir = new File(zincCache.getBaseDir(), "tmp");
+            tmpDir.mkdirs();
+            final File tempFile = File.createTempFile("zinc", ".jar", tmpDir);
             final long start = System.nanoTime();
             sbt.compiler.IC.compileInterfaceJar(
                     sbtInterfaceFileName,
@@ -119,7 +126,12 @@ public class ZincScalaCompilerFactory {
                     instance,
                     logger);
             final long compilationTimeMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-            LOGGER.debug(String.format("compiling zinc interface completed after %dms", compilationTimeMillis));
+            final String interfaceCompletedMessage = String.format("Zinc interface compilation took %dms", compilationTimeMillis);
+            if (compilationTimeMillis > 30000) {
+                LOGGER.warn(interfaceCompletedMessage);
+            } else {
+                LOGGER.debug(interfaceCompletedMessage);
+            }
 
             return zincCache.useCache("copying sbt interface", new Factory<File>() {
                 public File create() {

@@ -283,8 +283,7 @@ class ScalaCompileParallelIntegrationTest extends AbstractIntegrationSpec {
     }
 
     Set<File> getLeakedTempFiles() {
-        def allFiles = zincCacheHomeDir.allDescendants().collect { file(it) }
-        allFiles.findAll { it.name != "zinc-${DefaultScalaToolProvider.DEFAULT_ZINC_VERSION}.lock" && !(it.name.startsWith("compiler-interface-") && it.name.endsWith(".jar")) }
+        file(new File(zincCacheHomeDir, "tmp")).allDescendants().collect { file(it) }
     }
 
     Set<File> findInterfaceJars(TestFile zincDir) {
